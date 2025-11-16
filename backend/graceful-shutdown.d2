@@ -1,0 +1,167 @@
+direction: down
+
+title: Go Graceful Shutdown with WaitGroup {
+  near: top-center
+  shape: text
+  style: {
+    font-size: 24
+    bold: true
+  }
+}
+
+signal: "SIGINT/SIGTERM Signal" {
+  shape: oval
+  style.fill: "#ff6b6b"
+}
+
+main: "Main Process" {
+  shape: rectangle
+  style.fill: "#4ecdc4"
+
+  wait_signal: "Wait for Signal\n<-quit" {
+    shape: rectangle
+  }
+
+  log_shutdown: "Log: Shutting down server..." {
+    shape: rectangle
+    style.fill: "#ffe66d"
+  }
+
+  create_ctx: "Create Context\nWithTimeout(30s)" {
+    shape: rectangle
+    style.fill: "#95e1d3"
+  }
+
+  create_wg: "Create WaitGroup\nwg.Add(2)" {
+    shape: rectangle
+    style.fill: "#95e1d3"
+  }
+
+  wait_wg: "wg.Wait()\nBlock until both goroutines complete" {
+    shape: rectangle
+    style.fill: "#f38181"
+  }
+
+  log_complete: "Log: Graceful shutdown completed" {
+    shape: rectangle
+    style.fill: "#ffe66d"
+  }
+
+  exit: "os.Exit(0)" {
+    shape: oval
+    style.fill: "#51cf66"
+  }
+}
+
+goroutine1: "Goroutine 1\n(Server Shutdown)" {
+  shape: rectangle
+  style.fill: "#a8dadc"
+
+  start1: "Start immediately" {
+    shape: rectangle
+  }
+
+  shutdown: "server.Shutdown(shutdownCtx)" {
+    shape: rectangle
+    style.fill: "#457b9d"
+  }
+
+  log1: "Log: Server shut down successfully" {
+    shape: rectangle
+    style.fill: "#ffe66d"
+  }
+
+  done1: "defer wg.Done()" {
+    shape: rectangle
+    style.fill: "#51cf66"
+  }
+}
+
+goroutine2: "Goroutine 2\n(Database Close)" {
+  shape: rectangle
+  style.fill: "#a8dadc"
+
+  start2: "Start immediately" {
+    shape: rectangle
+  }
+
+  close_db: "repo.Close()" {
+    shape: rectangle
+    style.fill: "#457b9d"
+  }
+
+  log2: "Log: Database closed successfully" {
+    shape: rectangle
+    style.fill: "#ffe66d"
+  }
+
+  done2: "defer wg.Done()" {
+    shape: rectangle
+    style.fill: "#51cf66"
+  }
+}
+
+# Flow connections
+signal -> main.wait_signal: "Received"
+main.wait_signal -> main.log_shutdown
+main.log_shutdown -> main.create_ctx
+main.create_ctx -> main.create_wg
+main.create_wg -> goroutine1.start1: "go func() {...}"
+main.create_wg -> goroutine2.start2: "go func() {...}"
+main.create_wg -> main.wait_wg
+
+# Goroutine 1 flow
+goroutine1.start1 -> goroutine1.shutdown
+goroutine1.shutdown -> goroutine1.log1
+goroutine1.log1 -> goroutine1.done1
+
+# Goroutine 2 flow
+goroutine2.start2 -> goroutine2.close_db
+goroutine2.close_db -> goroutine2.log2
+goroutine2.log2 -> goroutine2.done2
+
+# WaitGroup synchronization
+goroutine1.done1 -> main.wait_wg: "wg counter: 2→1" {
+  style.stroke-dash: 3
+}
+goroutine2.done2 -> main.wait_wg: "wg counter: 1→0" {
+  style.stroke-dash: 3
+}
+
+main.wait_wg -> main.log_complete: "Both complete"
+main.log_complete -> main.exit
+
+# Context timeout (shown separately)
+timeout: "Context Timeout\n(30 seconds)" {
+  shape: diamond
+  style.fill: "#ff9ff3"
+}
+
+main.create_ctx -> timeout: "provides deadline" {
+  style.stroke-dash: 3
+}
+timeout -> goroutine1.shutdown: "timeout protection" {
+  style.stroke-dash: 3
+}
+
+# Legend
+legend: "Legend" {
+  shape: rectangle
+  style.fill: "#f0f0f0"
+
+  l1: "Solid line = Sequential flow" {
+    shape: text
+  }
+  l2: "Dashed line = Synchronization/Timeout" {
+    shape: text
+  }
+  l3: "Green = Success" {
+    shape: text
+  }
+  l4: "Red = Blocking operation" {
+    shape: text
+  }
+  l5: "Yellow = Logging" {
+    shape: text
+  }
+}

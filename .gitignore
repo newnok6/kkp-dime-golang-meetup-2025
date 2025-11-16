@@ -1,0 +1,25 @@
+# Binaries for the current project
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Compiled Go binaries
+*.test
+*.out
+
+# IDE specific files
+.idea/
+.vscode/
+
+# Dependency management
+vendor/
+go.mod
+go.sum
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Build output
+bin/
