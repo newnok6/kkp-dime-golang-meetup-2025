@@ -15,7 +15,6 @@
 # Dependency management
 vendor/
 go.mod
-go.sum
 
 # Operating system files
 .DS_Store
