@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,7 +14,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/newnok6/kkp-dime-golang-meetup-2025/backend/adaptor"
+	pb "github.com/newnok6/kkp-dime-golang-meetup-2025/backend/proto"
 	"github.com/newnok6/kkp-dime-golang-meetup-2025/backend/service"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -27,31 +30,56 @@ func main() {
 	stockService := service.NewStockOrderService(repo)
 
 	// Initialize HTTP handler
-	handler := adaptor.NewHTTPHandler(stockService)
+	httpHandler := adaptor.NewHTTPHandler(stockService)
 
-	// Setup router
+	// Setup HTTP router
 	router := mux.NewRouter()
-	handler.RegisterRoutes(router)
+	httpHandler.RegisterRoutes(router)
 
 	// Add logging middleware
 	router.Use(loggingMiddleware)
 
-	// Start server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8082"
+	// Start HTTP server
+	httpPort := os.Getenv("PORT")
+	if httpPort == "" {
+		httpPort = "8082"
 	}
 
-	server := &http.Server{
-		Addr:    ":" + port,
+	httpServer := &http.Server{
+		Addr:    ":" + httpPort,
 		Handler: router,
 	}
 
-	// Server startup
+	// HTTP Server startup
 	go func() {
-		log.Printf("---Starting server on port %s---", port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server failed: %v", err)
+		log.Printf("---Starting HTTP server on port %s---", httpPort)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("HTTP Server failed: %v", err)
+		}
+	}()
+
+	// Initialize gRPC handler
+	grpcHandler := adaptor.NewGRPCHandler(stockService)
+
+	// Setup gRPC server
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = "50051"
+	}
+
+	lis, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		log.Fatalf("Failed to listen on gRPC port: %v", err)
+	}
+
+	grpcServer := grpc.NewServer()
+	pb.RegisterStockOrderServiceServer(grpcServer, grpcHandler)
+
+	// gRPC Server startup
+	go func() {
+		log.Printf("---Starting gRPC server on port %s---", grpcPort)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("gRPC Server failed: %v", err)
 		}
 	}()
 
@@ -61,25 +89,48 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("---Stop the services---")
+	log.Println("---Start Graceful shutdown---")
 
 	// Create context with timeout for graceful shutdown operations
-	_, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	shutdownList := []interface{}{}
-	// Server
-	serverMap := map[string]interface{}{}
-	serverMap["server"] = server
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		log.Println("Shutting down HTTP server...")
+		httpServer.Shutdown(shutdownCtx)
+		log.Println("HTTP server stopped")
+		wg.Done()
+	}()
+
+	// gRPC Server - use graceful stop
+	go func() {
+		log.Println("Shutting down gRPC server...")
+		grpcServer.GracefulStop()
+		log.Println("gRPC server stopped")
+		wg.Done()
+	}()
+	wg.Wait()
+	log.Println("All servers closed successfully")
+
+	//--------------------------------
+
+	// Other dependencies shutdown list
+	shutDownList := []interface{}{}
+
 	// Repository
 	repositoryMap := map[string]interface{}{}
-	repositoryMap["repository"] = repo
+	repositoryMap["sqlite"] = repo
 
-	shutdownList = append(shutdownList, serverMap)
-	shutdownList = append(shutdownList, repositoryMap)
+	shutDownList = append(shutDownList, repositoryMap)
 
-	// Shared lib function for shutdown
-	<-shutdownService(&shutdownList)
+	// Shutdown other dependencies
+	log.Println("Shutting down other dependencies...")
+	<-shutdownService(&shutDownList)
+	log.Println("All Dependencies closed successfully")
+
+	log.Println("---Graceful shutdown completed---")
 	os.Exit(0)
 }
 
@@ -98,15 +149,13 @@ func shutdownService(shutDownList *[]interface{}) <-chan struct{} {
 					if err := c.Close(); err != nil {
 						log.Printf("Error closing service %s: %v", key, err)
 					}
-					log.Printf("Service %s closed successfully", key)
+					log.Printf("%s closed successfully", key)
 				}
 			}(k, v)
 		}
 	}
 
 	wg.Wait()
-
-	log.Println("---Graceful shutdown completed")
 	close(blockExitChannel)
 	return blockExitChannel
 }

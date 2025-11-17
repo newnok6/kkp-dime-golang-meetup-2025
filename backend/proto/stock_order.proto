@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package stockorder;
+
+option go_package = "github.com/newnok6/kkp-dime-golang-meetup-2025/backend/proto";
+
+import "google/protobuf/timestamp.proto";
+
+// StockOrderService defines the gRPC service for managing stock orders
+service StockOrderService {
+  rpc CreateOrder(CreateOrderRequest) returns (StockOrder);
+  rpc GetOrder(GetOrderRequest) returns (StockOrder);
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+  rpc CancelOrder(CancelOrderRequest) returns (CancelOrderResponse);
+}
+
+// Enums
+enum OrderType {
+  ORDER_TYPE_UNSPECIFIED = 0;
+  MARKET = 1;
+  LIMIT = 2;
+}
+
+enum OrderSide {
+  ORDER_SIDE_UNSPECIFIED = 0;
+  BUY = 1;
+  SELL = 2;
+}
+
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  PENDING = 1;
+  FILLED = 2;
+  CANCELLED = 3;
+  REJECTED = 4;
+}
+
+// Messages
+message StockOrder {
+  string id = 1;
+  string symbol = 2;
+  OrderType order_type = 3;
+  OrderSide order_side = 4;
+  int32 quantity = 5;
+  double price = 6;
+  OrderStatus status = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  string description = 10;
+}
+
+message CreateOrderRequest {
+  string symbol = 1;
+  OrderType order_type = 2;
+  OrderSide order_side = 3;
+  int32 quantity = 4;
+  double price = 5;
+}
+
+message GetOrderRequest {
+  string order_id = 1;
+}
+
+message ListOrdersRequest {
+  // Could add pagination parameters here in the future
+}
+
+message ListOrdersResponse {
+  repeated StockOrder orders = 1;
+}
+
+message CancelOrderRequest {
+  string order_id = 1;
+}
+
+message CancelOrderResponse {
+  string message = 1;
+}

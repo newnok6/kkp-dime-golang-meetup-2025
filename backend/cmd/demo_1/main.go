@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -21,6 +20,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize repository: %v", err)
 	}
+	log.Println("Repository initialized successfully")
 
 	// Initialize service
 	stockService := service.NewStockOrderService(repo)
@@ -60,39 +60,27 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("---Stop the services---")
+	log.Println("---Start Graceful shutdown---")
 
 	// Create context with timeout for graceful shutdown operations
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
-	// Use WaitGroup to shut down server and database concurrently
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-	wg.Go(func() {
-		defer wg.Done()
-		log.Println("Shutting down server...")
-		time.Sleep(2 * time.Second)
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Printf("Error shutting down server: %v", err)
-		} else {
-			log.Println("Server shut down successfully")
-		}
-	})
-	wg.Go(func() {
-		defer wg.Done()
-		log.Println("Closing database connection...")
-		time.Sleep(2 * time.Second)
-		if err := repo.Close(); err != nil {
-			log.Printf("Error closing database: %v", err)
-		} else {
-			log.Println("Database connection closed successfully")
-		}
-	})
+	log.Println("Shutting down server...")
+	time.Sleep(2 * time.Second)
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Error shutting down server: %v", err)
+	}
+	log.Println("Server closed successfully")
 
-	wg.Wait()
+	log.Println("Closing database connection...")
+	time.Sleep(2 * time.Second)
+	if err := repo.Close(); err != nil {
+		log.Printf("Error closing database: %v", err)
+	}
+	log.Println("Database closed successfully")
 
-	log.Println("---Graceful shutdown completed")
+	log.Println("---Graceful shutdown completed---")
 
 	os.Exit(0)
 }

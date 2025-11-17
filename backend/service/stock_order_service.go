@@ -39,11 +39,14 @@ func (s *stockOrderService) CreateOrder(ctx context.Context, req domain.CreateOr
 		UpdatedAt: time.Now(),
 	}
 
+	// Save the original order to the database
 	if err := s.repo.Create(ctx, order); err != nil {
-		return nil, fmt.Errorf("failed to create order: %w", err)
+		log.Printf("[CreateOrder] ERROR: Order %s: Failed to create in database: %v", order.ID, err)
+		return nil, err
 	}
 
-	go s.processOrder(ctx, order.ID)
+	log.Printf("[CreateOrder] Order %s: Successfully created", order.ID)
+
 	return order, nil
 }
 
@@ -86,33 +89,13 @@ func (s *stockOrderService) CancelOrder(ctx context.Context, orderID string) err
 }
 
 // processOrder simulates order processing and updates the database
-func (s *stockOrderService) processOrder(ctx context.Context, orderID string) {
-	log.Printf("[processOrder] Starting background processing for order: %s", orderID)
+func (s *stockOrderService) processOrder(ctx context.Context, order *domain.StockOrder) {
+	log.Printf("[processOrder] Starting background processing for order: %s", order.ID)
 
-	// Simulate processing delay
-	log.Printf("[processOrder] Order %s: Simulating 2-second processing delay", orderID)
-	time.Sleep(2 * time.Second)
-
-	log.Printf("[processOrder] Order %s: Processing delay complete, fetching order from database", orderID)
-	order, err := s.repo.GetByID(ctx, orderID)
-	if err != nil {
-		log.Printf("[processOrder] ERROR: Order %s: Failed to fetch from database: %v", orderID, err)
+	if err := s.repo.Create(ctx, order); err != nil {
+		log.Printf("[processOrder] ERROR: Order %s: Failed to update in database: %v", order.ID, err)
 		return
 	}
 
-	if order.Status != domain.OrderStatusPending {
-		log.Printf("[processOrder] Order %s: Skipping update, status is already %s", orderID, order.Status)
-		return
-	}
-
-	log.Printf("[processOrder] Order %s: Updating status from PENDING to FILLED", orderID)
-	order.Status = domain.OrderStatusFilled
-	order.UpdatedAt = time.Now()
-
-	if err := s.repo.Update(ctx, order); err != nil {
-		log.Printf("[processOrder] ERROR: Order %s: Failed to update in database: %v", orderID, err)
-		return
-	}
-
-	log.Printf("[processOrder] SUCCESS: Order %s: Successfully marked as FILLED", orderID)
+	log.Printf("[processOrder] SUCCESS: Order %s: Successfully marked as FILLED", order.ID)
 }

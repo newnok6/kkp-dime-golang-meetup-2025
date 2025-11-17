@@ -42,24 +42,6 @@ func (h *HTTPHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Basic validation
-	if req.Symbol == "" {
-		respondError(w, http.StatusBadRequest, "symbol is required")
-		return
-	}
-	if req.Quantity <= 0 {
-		respondError(w, http.StatusBadRequest, "quantity must be greater than 0")
-		return
-	}
-	if req.OrderType != domain.OrderTypeMarket && req.OrderType != domain.OrderTypeLimit {
-		respondError(w, http.StatusBadRequest, "order_type must be MARKET or LIMIT")
-		return
-	}
-	if req.OrderSide != domain.OrderSideBuy && req.OrderSide != domain.OrderSideSell {
-		respondError(w, http.StatusBadRequest, "order_side must be BUY or SELL")
-		return
-	}
-
 	order, err := h.service.CreateOrder(r.Context(), req)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
